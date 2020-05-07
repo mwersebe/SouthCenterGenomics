@@ -26,5 +26,21 @@
 --out SouthCenter
 # Use r to parse the output see the Popgenomics.r script for details 
 
+#Generate the sliding window stats 
+# Convert to the .geno formats
 
+python2 ~/Programs/genomics_general/VCF_processing/parseVCF.py -i ~/SouthCenter.snps.vcf.gz -o SouthCenter.geno.gz
+
+# Generate the pops file 
+
+~/Programs/bin/bcftools query -l ~/SouthCenter.snps.vcf.gz > individuals.txt
+
+cat individuals.txt |while read line; do echo $line| tr "\n" "\t"; echo $line|awk -F "_" '{print $2}'; done >pops.file
+
+#Calc the sliding window stats 
+python2 ~/Programs/genomics_general/popgenWindows.py -g SouthCenter.geno.gz -o SouthCenter.window.csv.gz -f phased -w 10000 -m 3 -s 2000 -p 4-8 -p 12-16 -p 20-24 -p lake -p 52-56 -p 60-64 --popsFile pops.file
+
+#parse file in R with popgenomics.r 
+
+#done
 
