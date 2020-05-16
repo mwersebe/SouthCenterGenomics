@@ -118,20 +118,20 @@ ggplot(fst, aes(POS, WEIR_AND_COCKERHAM_FST, colour = outlier)) + geom_point()
 #########################################################################################################
 #Slidinw window analysis of Fst/ Pi
 #Generated from Pyton script on command line
-SC.window <- read.csv("SouthCenter.popstats.slidewind.csv", header =T)
+SC.window <- read.csv("~/SC_RAD_analysis/Genome_Scan/SouthCenter.window.csv", header =T)
 names(SC.window)
 length(SC.window$scaffold)
-# Add the means FST for the window across populations:
-SC.window2 = SC.window %>% mutate(Mean_fst = rowMeans(select(., starts_with("Fst"))
-View(SC.window2)
+# Add the means FST for the window across populations: # remove the 60-64 cm pop bc of sample size
+SC.window2 = SC.window %>% mutate(Mean_fst = rowMeans(select(., starts_with("Fst"), contains(c("52.56", "lake", "4.8", "12.16", "20.24")))))
+
 #Calc the outlier threshold
 threshold.meanfst <- quantile(SC.window2$Mean_fst, 0.975, na.rm = T)
 #id outliers and add to the tibble data frame
-SC.window2<- SC.window2 %>% mutate(outlier = if_else(SC.window2$Mean_fst > threshold.meanfst, "outlier", "background"))
+SC.window2<- SC.window2 %>% mutate(outlier_fst = if_else(SC.window2$Mean_fst > threshold.meanfst, "outlier", "background"))
 #Plot the results
-SC.window2 %>% group_by(outlier) %>% tally()
+SC.window2 %>% group_by(outlier_fst) %>% tally()
 
-Man.sc_fst <- ggplot(SC.window2, aes(SC.window2$scaffold, SC.window2$Mean_fst, ymin = 0, ymax = 1.0, colour = SC.window2$outlier)) + geom_point()
+Man.sc_fst <- ggplot(SC.window2, aes(SC.window2$scaffold, SC.window2$Mean_fst, ymin = 0, ymax = 1.0, colour = SC.window2$outlier_fst)) + geom_point()
 Man.sc_fst <- Man.sc_fst + geom_abline(slope = 0, intercept = threshold.meanfst)
 Man.sc_fst
 ######################################################################################################
@@ -139,12 +139,12 @@ Man.sc_fst
 SC.window2 = SC.window2 %>% mutate(Mean_Pi = rowMeans(select(., starts_with("pi")), na.rm = T))
 threshold.meanpi <- quantile(SC.window2$Mean_Pi, 0.975, na.rm = T)
 #id outliers and add to the tibble data frame
-SC.window2<- SC.window2 %>% mutate(outlier = if_else(SC.window2$Mean_Pi > threshold.meanpi, "outlier", "background"))
+SC.window2<- SC.window2 %>% mutate(outlier_pi = if_else(SC.window2$Mean_Pi > threshold.meanpi, "outlier", "background"))
 #Plot the results
-SC.window2 %>% group_by(outlier) %>% tally()
+SC.window2 %>% group_by(outlier_pi) %>% tally()
 
-Man.sc_pi <- ggplot(SC.window2, aes(SC.window2$scaffold, SC.window2$Mean_Pi, ymin = 0, ymax = 1.0, colour = SC.window2$outlier)) + geom_point()
-Man.sc_pi <- Man.sc_fst + geom_abline(slope = 0, intercept = threshold.meanpi)
+Man.sc_pi <- ggplot(SC.window2, aes(SC.window2$scaffold, SC.window2$Mean_Pi, ymin = 0, ymax = 1.0, colour = SC.window2$outlier_pi)) + geom_point()
+Man.sc_pi <- Man.sc_pi + geom_abline(slope = 0, intercept = threshold.meanpi)
 Man.sc_pi
 #############################################################################################
 #########################Selection with PCAdapt and Outflank#################################
@@ -152,9 +152,10 @@ Man.sc_pi
 library("devtools")
 library("OutFLANK")
 library("pcadapt")
+library("qvalue")
 ###########################################################################################
 #Read in the data:
-SC.adapt <- read.pcadapt("~/SC_RAD_analysis/VCF/SouthCenter.snps.vcf", type = "vcf")
+SC.adapt <- read.pcadapt("~/VCF_files/ALL_SNPs/SouthCenter.snps.vcf.gz", type = "vcf")
 #Visualize:
 Scpcadapt <- pcadapt(input = SC.adapt, K = 20)
 plot(Scpcadapt, option = "screeplot")
@@ -193,7 +194,7 @@ par(mfrow = c(1,1))
 for (i in 1:2)
 plot(Scpcadapt$loadings[, i], pch = 19, cex = .3, ylab = paste0("Loadings PC", i))
 ########################################################################################
-#Outflank here 
+#########################################Outflank here 
 ########################################################################################
 #read in the data and set up the dataframe from the documentation:
 SouthCenter <- read.vcfR("~/SC_RAD_analysis/VCF/SouthCenter.snps.vcf")
