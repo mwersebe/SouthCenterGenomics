@@ -127,10 +127,10 @@ SC.window2 = SC.window %>% mutate(Mean_fst = rowMeans(select(., starts_with("Fst
 #Calc the outlier threshold
 threshold.meanfst <- quantile(SC.window2$Mean_fst, 0.975, na.rm = T)
 #id outliers and add to the tibble data frame
-SC.window2<- SC.window2 %>% mutate(outlier_fst = if_else(SC.window2$Mean_fst > threshold.meanfst, "outlier", "background"))
+SC.window2<- SC.window2 %>% mutate(outlier_fst = if_else(SC.window2$Mean_fst > threshold.meanfst, T, F))
 #Plot the results
 SC.window2 %>% group_by(outlier_fst) %>% tally()
-
+grep("T", SC.window2$outlier_fst)
 Man.sc_fst <- ggplot(SC.window2, aes(SC.window2$scaffold, SC.window2$Mean_fst, ymin = 0, ymax = 1.0, colour = SC.window2$outlier_fst)) + geom_point()
 Man.sc_fst <- Man.sc_fst + geom_abline(slope = 0, intercept = threshold.meanfst)
 Man.sc_fst
@@ -153,6 +153,7 @@ library("devtools")
 library("OutFLANK")
 library("pcadapt")
 library("qvalue")
+library("vcfR")
 ###########################################################################################
 #Read in the data:
 SC.adapt <- read.pcadapt("~/VCF_files/ALL_SNPs/SouthCenter.snps.vcf.gz", type = "vcf")
@@ -174,19 +175,21 @@ plot(Scpcadapt, option = "stat.distribution")
 #Correct for false discovery using FDR
 qval <- qvalue(Scpcadapt$pvalues)$qvalues
 alpha <- 0.1
-outliers <- which(qval < alpha)
-length(outliers)
+outliers_FDR <- which(qval < alpha)
+length(outliers_FDR)
+print(outliers_FDR)
 #Outliers with BH procedure
 padj <- p.adjust(Scpcadapt$pvalues,method="BH")
 alpha <- 0.1
-outliers <- which(padj < alpha)
-length(outliers)
+outliers_BH <- which(padj < alpha)
+length(outliers_BH)
+print(outliers_BH)
 #Bonferroni- Most Conservative
 padj <- p.adjust(Scpcadapt$pvalues,method="bonferroni")
 alpha <- 0.1
-outliers <- which(padj < alpha)
-length(outliers)
-print(outliers)
+outliers_BF <- which(padj < alpha)
+length(outliers_BF)
+print(outliers_BF)
 
 #Plot loadings to see if anything looks off:
 
@@ -196,32 +199,81 @@ plot(Scpcadapt$loadings[, i], pch = 19, cex = .3, ylab = paste0("Loadings PC", i
 ########################################################################################
 #########################################Outflank here 
 ########################################################################################
-#read in the data and set up the dataframe from the documentation:
-SouthCenter <- read.vcfR("~/SC_RAD_analysis/VCF/SouthCenter.snps.vcf")
-geno <- extractchromosome <- getCHROM(SouthCenter)
-Geno.SC <- matrix(NA, nrow = nrow(geno), ncol = ncol(geno))
-Geno.SC[geno %in% c("0/0", "0|0")] <- 0
-Geno.SC[geno %in% c("0/1", "1/0", "1|0", "0|1")] <- 1
-Geno.SC[geno %in% c("1/1", "1|1")] <- 2
-Geno.SC[is.na(Geno.SC)] <- 9
-table(as.vector(Geno.SC))
+#read in the data and set up the dataframe from the documentation: All snps
+SouthCenter <- read.vcfR("/home/matt/VCF_files/ALL_SNPs/SouthCenter.all_rm6064.vcf.gz")
+geno.all <- extract.gt(SouthCenter)
+position.all <- getPOS(SouthCenter)
+chromosome.all <- getCHROM(SouthCenter)
+Geno.SCall <- matrix(NA, nrow = nrow(geno.all), ncol = ncol(geno.all))
+Geno.SCall[geno.all %in% c("0/0", "0|0")] <- 0
+Geno.SCall[geno.all %in% c("0/1", "1/0", "1|0", "0|1")] <- 1
+Geno.SCall[geno.all %in% c("1/1", "1|1")] <- 2
+Geno.SCall[is.na(Geno.SCall)] <- 9
+table(as.vector(Geno.SCall))
 #####################################################################
-#Calculate Fst
-poplist.names <- c("12-16", "12-16",	"12-16", "12-16", "12-16", "12-16",	"12-16", "12-16",	"12-16",	"12-16",	"20-24",	"20-24", "20-24", "20-24",	"20-24",	"20-24", "20-24",	"20-24",	"20-24",	"20-24",	"4-8",	"4-8",	"4-8",	"4-8",	"4-8", "4-8",	"4-8",	"4-8",	"4-8",	"4-8",	"52-56",	"52-56", "60-64",	"lake", "lake",	"lake",	"lake", "lake", "lake",	"lake",	"lake",	"lake",	"lake")
-colnames(Geno.SC) <- c("12-16", "12-16",	"12-16", "12-16", "12-16", "12-16",	"12-16", "12-16",	"12-16",	"12-16",	"20-24",	"20-24", "20-24", "20-24",	"20-24",	"20-24", "20-24",	"20-24",	"20-24",	"20-24",	"4-8",	"4-8",	"4-8",	"4-8",	"4-8", "4-8",	"4-8",	"4-8",	"4-8",	"4-8",	"52-56",	"52-56", "60-64",	"lake", "lake",	"lake",	"lake", "lake", "lake",	"lake",	"lake",	"lake",	"lake")
-SC_fst <- MakeDiploidFSTMat(Geno.SC, locusNames = position, popNames = poplist.names)
-SC_fst <- MakeDiploidFSTMat(t(Geno.SC), locusNames = position, popNames = colnames(Geno.SC))
+#VCF that has been LD pruned by writing 1 snp per tag 
+SouthCenter.LD <- read.vcfR("/home/matt/VCF_files/Single_SNP/SouthCenter.single_rm6064.vcf.gz")
+geno.LD <- extract.gt(SouthCenter.LD)
+position.LD <- getPOS(SouthCenter.LD)
+chromosome.LD <- getCHROM(SouthCenter.LD)
+Geno.SCLD <- matrix(NA, nrow = nrow(geno.LD), ncol = ncol(geno.LD))
+Geno.SCLD[geno.LD %in% c("0/0", "0|0")] <- 0
+Geno.SCLD[geno.LD %in% c("0/1", "1/0", "1|0", "0|1")] <- 1
+Geno.SCLD[geno.LD %in% c("1/1", "1|1")] <- 2
+Geno.SCLD[is.na(Geno.SCLD)] <- 9
+table(as.vector(Geno.SCLD))
+
+#####################################################################
+#Calculate Fst for All SNPs
+
+colnames(Geno.SCall) <- c("12-16", "12-16",	"12-16", "12-16", "12-16", "12-16",	"12-16", "12-16",	"12-16",	"12-16",	"20-24",	"20-24", "20-24", "20-24",	"20-24",	"20-24", "20-24",	"20-24",	"20-24",	"20-24",	"4-8",	"4-8",	"4-8",	"4-8",	"4-8", "4-8",	"4-8",	"4-8",	"4-8",	"4-8",	"52-56",	"52-56",	"lake", "lake",	"lake",	"lake", "lake", "lake",	"lake",	"lake",	"lake",	"lake")
+
+colnames(Geno.SCall)
+SC_fst <- MakeDiploidFSTMat(t(Geno.SCall), locusNames = position.all, popNames = colnames(Geno.SCall))
 head(SC_fst)
 #QC plots for for sanity check:
 plot(SC_fst$He, SC_fst$FST)
-plot(Sc_fst$FST, SC_fst$FSTNoCorr)
-abline(0,1)
 plot(SC_fst$FST, SC_fst$FSTNoCorr)
 abline(0,1)
+#Fst for LD SNPs
+colnames(Geno.SCLD) <- c("12-16", "12-16",	"12-16", "12-16", "12-16", "12-16",	"12-16", "12-16",	"12-16",	"12-16",	"20-24",	"20-24", "20-24", "20-24",	"20-24",	"20-24", "20-24",	"20-24",	"20-24",	"20-24",	"4-8",	"4-8",	"4-8",	"4-8",	"4-8", "4-8",	"4-8",	"4-8",	"4-8",	"4-8",	"52-56",	"52-56",	"lake", "lake",	"lake",	"lake", "lake", "lake",	"lake",	"lake",	"lake",	"lake")
 
+colnames(Geno.SCLD)
+SC_fst_LD <- MakeDiploidFSTMat(t(Geno.SCLD), locusNames = position.LD, popNames = colnames(Geno.SCLD))
+head(SC_fst_LD)
+plot(SC_fst_LD$He, SC_fst_LD$FST)
+plot(SC_fst_LD$FST, SC_fst_LD$FSTNoCorr)
+abline(0,1)
+#######################################################################
+##Null Distribution with LD pruned SNPs
+
+Pruned_fst<- OutFLANK(SC_fst_LD, NumberOfSamples = 42, qthreshold = 0.05, Hmin = 0.1)
+str(Pruned_fst)
+head(Pruned_fst$results)
+
+OutFLANKResultsPlotter(Pruned_fst, withOutliers = T, NoCorr = T, Hmin = 0.1, binwidth = 0.001, Zoom = F, titletext = NULL)
+
+OutFLANKResultsPlotter(Pruned_fst, withOutliers = T, NoCorr = T, Hmin = 0.1, binwidth = 0.001, Zoom = T, RightZoomFraction = 0.15, titletext = NULL)
+
+hist(Pruned_fst$results$pvaluesRightTail)
+
+
+All_loci <- pOutlierFinderChiSqNoCorr(SC_fst, Fstbar = Pruned_fst$FSTNoCorrbar, dfInferred = Pruned_fst$dfInferred, qthreshold = 0.05, Hmin = 0.1)
+
+head(All_loci)
+
+All_My_Outliers <- All_loci$OutlierFlag == T
+
+plot(All_loci$He, All_loci$FST, pch = 19, col = rgb(0,0,0,0.1))
+points(All_loci$He[All_My_Outliers], All_loci$FST[All_My_Outliers], col = "blue")
+
+hist(All_loci$pvaluesRightTail)
+
+plot(All_loci$LocusName[All_loci$He>0.1], All_loci$FST[All_loci$He>0.1], 
+     xlab = "Position", ylab = "FST", col = rgb(0,0,0,0.2))
+points(All_loci$LocusName[All_My_Outliers], All_loci$FST[All_My_Outliers], col = "red", pch = 20)
 #To do: 
-# insert and LD pruned dataset for null distro 
-# do selection tests for Fst ouliers
+
 # other popgen simulations
 ###################################
 
